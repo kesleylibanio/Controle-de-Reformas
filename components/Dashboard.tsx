@@ -12,8 +12,8 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ stats, onNewShipment, onViewList, recentShipments, onOpenReturn }) => {
-  const paidReforms = Math.max(0, stats.totalReformed - stats.totalBonusPaid);
-  const nextBonusProgress = paidReforms % 15;
+  // Progresso baseado no resto da divisão por 15 das reformas totais
+  const nextBonusProgress = stats.totalReformed % 15;
   const progressPercent = (nextBonusProgress / 15) * 100;
 
   const totalReturns = stats.totalReformed + stats.totalRepaired + stats.totalExchanged + stats.totalFailed;
@@ -139,7 +139,6 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, onNewShipment, onViewList,
         ) : (
           <div className="divide-y divide-slate-50 dark:divide-slate-700">
             {recentShipments.map((shipment) => {
-               // Correção defensiva para evitar erro de undefined .reduce
                const returns = Array.isArray(shipment.returns) ? shipment.returns : [];
                const totalReturned = returns.reduce((sum, r) => sum + r.reformed + r.repaired + r.exchanged + r.failed, 0);
                

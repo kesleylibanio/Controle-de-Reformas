@@ -1,15 +1,18 @@
 
 import React, { useState } from 'react';
-import { ChevronLeft, RotateCcw, Clock, CheckCircle2, History, ChevronDown, ChevronUp, FileText, Gift, AlertCircle } from 'lucide-react';
+import { ChevronLeft, RotateCcw, Clock, CheckCircle2, History, ChevronDown, ChevronUp, FileText, Gift, AlertCircle, Edit2, Trash2 } from 'lucide-react';
 import { Shipment, ShipmentStatus } from '../types';
 
 interface ShipmentListProps {
   shipments: Shipment[];
   onOpenReturn: (id: string) => void;
+  onEditReturn: (shipId: string, returnId: string) => void;
+  onDeleteReturn: (shipId: string, returnId: string) => void;
+  onDeleteShipment: (id: string) => void;
   onBack: () => void;
 }
 
-const ShipmentList: React.FC<ShipmentListProps> = ({ shipments, onOpenReturn, onBack }) => {
+const ShipmentList: React.FC<ShipmentListProps> = ({ shipments, onOpenReturn, onEditReturn, onDeleteReturn, onDeleteShipment, onBack }) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const toggleExpand = (id: string) => {
@@ -36,11 +39,13 @@ const ShipmentList: React.FC<ShipmentListProps> = ({ shipments, onOpenReturn, on
       ) : (
         <div className="space-y-3">
           {shipments.map((s) => {
-            // Correção defensiva: Garante que returns seja array antes de chamar reduce
             const returns = Array.isArray(s.returns) ? s.returns : [];
             const totalReturned = returns.reduce((sum, r) => sum + (r.reformed || 0) + (r.repaired || 0) + (r.exchanged || 0) + (r.failed || 0), 0);
             const isExpanded = expandedId === s.id;
             const progressPercent = Math.min(100, (totalReturned / s.quantitySent) * 100);
+
+            // Verifica se foi recebida de uma única vez (1 retorno que completa a remessa)
+            const isSingleReceipt = returns.length === 1 && totalReturned === s.quantitySent;
 
             let dotColor = "bg-red-500";
             let statusTextColor = "text-red-500";
@@ -71,10 +76,25 @@ const ShipmentList: React.FC<ShipmentListProps> = ({ shipments, onOpenReturn, on
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      {/* Lógica solicitada: Excluir/Editar remessa inteira só se recebida de uma vez */}
+                      {isSingleReceipt && (
+                        <button 
+                          onClick={(e) => { 
+                            e.stopPropagation(); 
+                            onDeleteShipment(s.id); 
+                          }}
+                          className="bg-slate-100 dark:bg-slate-700 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-600 p-2 rounded-xl transition-all active:scale-95"
+                          title="Excluir Remessa Completa"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      )}
+
                       {s.status !== ShipmentStatus.FINISHED && (
                         <button 
                           onClick={(e) => { e.stopPropagation(); onOpenReturn(s.id); }}
                           className="bg-red-600 dark:bg-red-700 hover:bg-red-700 dark:hover:bg-red-800 text-white p-2 rounded-xl shadow-md active:scale-95 transition-all"
+                          title="Registrar Novo Retorno"
                         >
                           <RotateCcw className="w-5 h-5" />
                         </button>
@@ -111,7 +131,24 @@ const ShipmentList: React.FC<ShipmentListProps> = ({ shipments, onOpenReturn, on
                                 </span>
                             )}
                           </div>
-                          <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">{new Date(r.date).toLocaleDateString()}</span>
+                          
+                          <div className="flex items-center gap-1">
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); onEditReturn(s.id, r.id); }}
+                              className="p-1.5 text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors"
+                              title="Editar este retorno"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); onDeleteReturn(s.id, r.id); }}
+                              className="p-1.5 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                              title="Excluir este retorno"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 ml-1">{new Date(r.date).toLocaleDateString()}</span>
+                          </div>
                         </div>
                         <div className="grid grid-cols-4 gap-1 text-center">
                           <div>

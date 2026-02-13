@@ -1,17 +1,18 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { X, Save, AlertCircle, FileText, Calendar, Info, Gift, CheckCircle, Minus, Plus } from 'lucide-react';
 import { Shipment, ReturnEvent } from '../types';
 
 interface ReturnFormProps {
   shipment: Shipment;
+  editData?: ReturnEvent;
   pendingBonuses: number;
   existingInvoiceNumbers: string[];
   onSave: (event: ReturnEvent) => void;
   onCancel: () => void;
 }
 
-const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, existingInvoiceNumbers, onSave, onCancel }) => {
+const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, editData, pendingBonuses, existingInvoiceNumbers, onSave, onCancel }) => {
   const [reformed, setReformed] = useState(0);
   const [repaired, setRepaired] = useState(0);
   const [exchanged, setExchanged] = useState(0);
@@ -21,16 +22,34 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
   const [bonusesToRedeem, setBonusesToRedeem] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const alreadyReturned = useMemo(() => {
-    return shipment.returns.reduce((sum, r) => sum + r.reformed + r.repaired + r.exchanged + r.failed, 0);
-  }, [shipment.returns]);
+  // Inicializa dados se for edição
+  useEffect(() => {
+    if (editData) {
+      setReformed(editData.reformed);
+      setRepaired(editData.repaired);
+      setExchanged(editData.exchanged);
+      setFailed(editData.failed);
+      setReturnDate(editData.date);
+      setInvoiceNumber(editData.invoiceNumber);
+      setBonusesToRedeem(editData.bonusesRedeemed || 0);
+    }
+  }, [editData]);
+
+  // Calcula o que já foi retornado EXCLUINDO o registro atual (se for edição)
+  const returnedOthers = useMemo(() => {
+    return shipment.returns
+      .filter(r => r.id !== editData?.id)
+      .reduce((sum, r) => sum + r.reformed + r.repaired + r.exchanged + r.failed, 0);
+  }, [shipment.returns, editData]);
 
   const currentTotalInThisForm = reformed + repaired + exchanged + failed;
-  const remainingTotal = shipment.quantitySent - alreadyReturned;
+  const remainingTotal = shipment.quantitySent - returnedOthers;
   
   const isInvoiceDuplicate = useMemo(() => {
-    return existingInvoiceNumbers.includes(invoiceNumber.trim().toLowerCase());
-  }, [invoiceNumber, existingInvoiceNumbers]);
+    // Se for edição, ignora o próprio número da nota original
+    const otherInvoices = existingInvoiceNumbers.filter(inv => inv !== editData?.invoiceNumber?.toLowerCase());
+    return otherInvoices.includes(invoiceNumber.trim().toLowerCase());
+  }, [invoiceNumber, existingInvoiceNumbers, editData]);
 
   const canSave = currentTotalInThisForm > 0 && 
                   currentTotalInThisForm <= remainingTotal && 
@@ -42,14 +61,14 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
     setError(null);
 
     if (isInvoiceDuplicate) {
-      setError("Este número de Nota Fiscal já foi cadastrado anteriormente.");
+      setError("Este número de Nota Fiscal já foi cadastrado em outro lançamento.");
       return;
     }
 
     if (!canSave) return;
 
     const newEvent: ReturnEvent = {
-      id: crypto.randomUUID(),
+      id: editData?.id || crypto.randomUUID(),
       date: returnDate,
       invoiceNumber: invoiceNumber.trim(),
       reformed,
@@ -66,8 +85,11 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
     e.target.select();
   };
 
+  // O bônus disponível para o formulário é o global + o que já foi usado neste retorno se for edição
+  const maxAvailableBonus = pendingBonuses + (editData?.bonusesRedeemed || 0);
+
   const incrementBonus = () => {
-    if (bonusesToRedeem < pendingBonuses) {
+    if (bonusesToRedeem < maxAvailableBonus) {
       setBonusesToRedeem(prev => prev + 1);
     }
   };
@@ -82,7 +104,7 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in zoom-in-95 duration-200">
       <div className="bg-slate-800 dark:bg-slate-950 text-white p-4 flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-bold">Registrar Retorno</h2>
+          <h2 className="text-lg font-bold">{editData ? 'Editar Retorno' : 'Registrar Retorno'}</h2>
           <p className="text-xs text-slate-400">Referente a {shipment.number}</p>
         </div>
         <button onClick={onCancel} className="p-1 hover:bg-slate-700 dark:hover:bg-slate-800 rounded-full transition-colors">
@@ -96,7 +118,7 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
           <p className="text-xl font-black text-slate-700 dark:text-slate-200">{shipment.quantitySent}</p>
         </div>
         <div className="text-center px-2">
-          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Pendente</p>
+          <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Disponível</p>
           <p className="text-xl font-black text-red-600 dark:text-red-400">{remainingTotal}</p>
         </div>
       </div>
@@ -140,7 +162,7 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <label className="block text-xs font-bold text-green-700 dark:text-green-500">REFORMADOS</label>
+            <label className="block text-xs font-bold text-green-700 dark:text-green-500 uppercase">Reformados</label>
             <input 
               type="number"
               min="0"
@@ -151,7 +173,7 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
             />
           </div>
           <div className="space-y-1">
-            <label className="block text-xs font-bold text-red-700 dark:text-red-400">CONSERTADOS</label>
+            <label className="block text-xs font-bold text-red-700 dark:text-red-400 uppercase">Consertados</label>
             <input 
               type="number"
               min="0"
@@ -162,7 +184,7 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
             />
           </div>
           <div className="space-y-1">
-            <label className="block text-xs font-bold text-purple-700 dark:text-purple-400">TROCADOS</label>
+            <label className="block text-xs font-bold text-purple-700 dark:text-purple-400 uppercase">Trocados</label>
             <input 
               type="number"
               min="0"
@@ -173,7 +195,7 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
             />
           </div>
           <div className="space-y-1">
-            <label className="block text-xs font-bold text-red-900 dark:text-red-300">SEM REFORMA</label>
+            <label className="block text-xs font-bold text-red-900 dark:text-red-300 uppercase">Sem Reforma</label>
             <input 
               type="number"
               min="0"
@@ -185,7 +207,7 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
           </div>
         </div>
 
-        {pendingBonuses > 0 && (
+        {maxAvailableBonus > 0 && (
           <div className="p-4 rounded-2xl border-2 border-slate-100 dark:border-slate-700 bg-white dark:bg-slate-900/30 shadow-sm transition-all">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
@@ -193,8 +215,8 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
                   <Gift className="w-5 h-5" />
                 </div>
                 <div>
-                  <p className="font-bold text-sm dark:text-slate-200">Resgatar bônus?</p>
-                  <p className="text-[10px] font-medium opacity-70 dark:text-slate-400">Disponíveis: {pendingBonuses}</p>
+                  <p className="font-bold text-sm dark:text-slate-200">Uso de bônus</p>
+                  <p className="text-[10px] font-medium opacity-70 dark:text-slate-400">Máx. permitido: {maxAvailableBonus}</p>
                 </div>
               </div>
               {bonusesToRedeem > 0 && <CheckCircle className="w-6 h-6 text-yellow-500" />}
@@ -218,7 +240,7 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
               <button 
                 type="button" 
                 onClick={incrementBonus}
-                disabled={bonusesToRedeem >= pendingBonuses}
+                disabled={bonusesToRedeem >= maxAvailableBonus}
                 className="p-2 bg-white dark:bg-slate-800 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm text-yellow-600 dark:text-yellow-500 disabled:opacity-30 active:scale-95 transition-all"
               >
                 <Plus className="w-5 h-5" />
@@ -230,12 +252,12 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
         <div className={`p-4 rounded-xl flex items-center justify-between transition-colors ${currentTotalInThisForm > remainingTotal ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-400' : currentTotalInThisForm === remainingTotal ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-400' : 'bg-red-50 dark:bg-slate-900 text-red-800 dark:text-slate-300'}`}>
           <div className="flex items-center gap-2">
             <Info className="w-5 h-5" />
-            <span className="text-sm font-bold">Lançamento Atual: {currentTotalInThisForm} pneus</span>
+            <span className="text-sm font-bold">Total do Registro: {currentTotalInThisForm} pneus</span>
           </div>
           {currentTotalInThisForm > remainingTotal ? (
             <span className="text-xs font-black uppercase">Excede o limite!</span>
           ) : (
-            <span className="text-xs font-black uppercase">{currentTotalInThisForm === remainingTotal ? 'Fechamento Total' : 'Lançamento Parcial'}</span>
+            <span className="text-xs font-black uppercase">{currentTotalInThisForm === remainingTotal ? 'Fechamento Total' : 'Parcial'}</span>
           )}
         </div>
 
@@ -246,18 +268,27 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, pendingBonuses, exist
           </div>
         )}
 
-        <button 
-          type="submit"
-          disabled={!canSave}
-          className={`w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 ${
-            canSave 
-              ? 'bg-red-600 dark:bg-red-700 hover:bg-red-700 dark:hover:bg-red-800 text-white shadow-red-200' 
-              : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none'
-          }`}
-        >
-          <Save className="w-5 h-5" />
-          Registrar Retorno
-        </button>
+        <div className="flex gap-3">
+           <button 
+            type="button"
+            onClick={onCancel}
+            className="flex-1 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-bold py-4 rounded-xl transition-all"
+          >
+            Cancelar
+          </button>
+          <button 
+            type="submit"
+            disabled={!canSave}
+            className={`flex-[2] font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 ${
+              canSave 
+                ? 'bg-red-600 dark:bg-red-700 hover:bg-red-700 dark:hover:bg-red-800 text-white shadow-red-200' 
+                : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed shadow-none'
+            }`}
+          >
+            <Save className="w-5 h-5" />
+            {editData ? 'Salvar Alterações' : 'Registrar Retorno'}
+          </button>
+        </div>
       </form>
     </div>
   );
