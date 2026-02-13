@@ -21,8 +21,8 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, onNewShipment, onViewList,
 
   return (
     <div className="space-y-6">
-      {/* Primeiras Métricas Principais - Ajustado para 5 colunas no desktop */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      {/* Grade de Métricas Principais */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col justify-between transition-colors">
           <div className="bg-blue-100 dark:bg-blue-900/40 p-2 rounded-lg text-blue-600 dark:text-blue-400 w-fit mb-3">
             <RefreshCw className="w-5 h-5" />
@@ -63,13 +63,13 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, onNewShipment, onViewList,
           </div>
         </div>
 
-        {/* Novo Card: Bônus Resgatados */}
-        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col justify-between transition-colors col-span-2 sm:col-span-1 md:col-span-1 lg:col-span-1">
-          <div className="bg-green-100 dark:bg-green-900/40 p-2 rounded-lg text-green-600 dark:text-green-400 w-fit mb-3">
+        {/* Card de Bônus Resgatados Totais */}
+        <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col justify-between transition-colors col-span-2 md:col-span-1">
+          <div className="bg-emerald-100 dark:bg-emerald-900/40 p-2 rounded-lg text-emerald-600 dark:text-emerald-400 w-fit mb-3">
             <CheckCircle className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Resgatados</p>
+            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Total Resgatado</p>
             <p className="text-xl font-black text-slate-800 dark:text-white">{stats.totalBonusPaid}</p>
           </div>
         </div>
