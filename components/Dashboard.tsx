@@ -20,8 +20,8 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, onNewShipment, onViewList,
   const successRate = totalReturns > 0 ? (stats.totalReformed / totalReturns) * 100 : 0;
 
   return (
-    <div className="space-y-6">
-      {/* Grade de Métricas Principais */}
+    <div className="space-y-6 animate-in fade-in duration-700">
+      {/* Primeiras Métricas Principais */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col justify-between transition-colors">
           <div className="bg-blue-100 dark:bg-blue-900/40 p-2 rounded-lg text-blue-600 dark:text-blue-400 w-fit mb-3">
@@ -63,7 +63,6 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, onNewShipment, onViewList,
           </div>
         </div>
 
-        {/* Card de Bônus Resgatados Totais */}
         <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-700 flex flex-col justify-between transition-colors col-span-2 md:col-span-1">
           <div className="bg-emerald-100 dark:bg-emerald-900/40 p-2 rounded-lg text-emerald-600 dark:text-emerald-400 w-fit mb-3">
             <CheckCircle className="w-5 h-5" />
@@ -132,7 +131,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, onNewShipment, onViewList,
           </button>
         </div>
         
-        {recentShipments.length === 0 ? (
+        {(recentShipments || []).length === 0 ? (
           <div className="p-10 text-center text-slate-400">
             <Disc className="w-12 h-12 mx-auto mb-2 opacity-20" />
             <p>Nenhuma remessa encontrada.</p>
@@ -140,7 +139,9 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, onNewShipment, onViewList,
         ) : (
           <div className="divide-y divide-slate-50 dark:divide-slate-700">
             {recentShipments.map((shipment) => {
-               const totalReturned = shipment.returns.reduce((sum, r) => sum + r.reformed + r.repaired + r.exchanged + r.failed, 0);
+               // Correção defensiva para evitar erro de undefined .reduce
+               const returns = Array.isArray(shipment.returns) ? shipment.returns : [];
+               const totalReturned = returns.reduce((sum, r) => sum + r.reformed + r.repaired + r.exchanged + r.failed, 0);
                
                let statusStyles = "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400";
                let StatusIcon = AlertCircle;

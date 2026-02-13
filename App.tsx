@@ -45,54 +45,84 @@ const App: React.FC = () => {
   const [showBonusAlert, setShowBonusAlert] = useState(false);
   const [lastBonusCount, setLastBonusCount] = useState(0);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
-  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  const [hasLoadedFromDB, setHasLoadedFromDB] = useState(false);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem(THEME_KEY);
     return saved === 'dark';
   });
 
+  // Busca lista de usuários
   const fetchUsers = useCallback(async () => {
-    setLoadingUsers(true);
     try {
-      const response = await fetch(`${GOOGLE_SCRIPT_URL}?t=${Date.now()}`);
+      const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getUsers&t=${Date.now()}`);
       if (!response.ok) throw new Error("Erro na resposta do servidor");
-      
       const data = await response.json();
       if (Array.isArray(data)) {
         setValidUsers(data);
-      } else {
-        throw new Error("Formato de dados inválido");
       }
     } catch (error) {
-      console.warn("Usando lista de usuários padrão devido a erro de conexão:", error);
+      console.warn("Usando usuários padrão:", error);
       setValidUsers([
         { username: "Éder", password: "1" },
         { username: "Wender", password: "1" },
         { username: "Kesley", password: "1" },
         { username: "Roberto", password: "1" }
       ]);
-    } finally {
-      setLoadingUsers(false);
     }
   }, []);
 
-  useEffect(() => {
-    const savedUser = localStorage.getItem(AUTH_KEY);
-    if (savedUser) setCurrentUser(savedUser);
-
-    const savedData = localStorage.getItem(STORAGE_KEY);
-    if (savedData) {
-      try {
-        const parsed = JSON.parse(savedData);
-        setShipments(parsed);
-      } catch (e) {
-        console.error("Failed to parse local storage", e);
+  // BUSCA GLOBAL DE REMESSAS (O QUE RESOLVE O PROBLEMA DE COMPARTILHAMENTO)
+  const fetchShipments = useCallback(async () => {
+    setSyncStatus('syncing');
+    try {
+      const response = await fetch(`${GOOGLE_SCRIPT_URL}?action=getShipments&t=${Date.now()}`);
+      if (!response.ok) throw new Error("Erro ao buscar dados remotos");
+      const data = await response.json();
+      
+      let incoming: Shipment[] = [];
+      if (data && Array.isArray(data.shipments)) {
+        incoming = data.shipments;
+      } else if (Array.isArray(data)) {
+        incoming = data;
       }
+
+      // Sanitização básica para evitar erros de renderização
+      const sanitized = incoming.map(s => ({
+        ...s,
+        returns: Array.isArray(s.returns) ? s.returns : []
+      }));
+
+      setShipments(sanitized);
+      setHasLoadedFromDB(true); // Marca que o app agora tem a versão "oficial" do banco
+      setSyncStatus('success');
+    } catch (error) {
+      console.error("Erro na sincronização Master:", error);
+      setSyncStatus('error');
+      // Tenta recuperar do storage local como fallback apenas em erro de rede
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try { setShipments(JSON.parse(saved)); } catch(e){}
+      }
+    } finally {
+      setLoadingInitial(false);
+      setTimeout(() => setSyncStatus('idle'), 2000);
     }
+  }, []);
 
-    fetchUsers();
-  }, [fetchUsers]);
+  // Inicialização
+  useEffect(() => {
+    const init = async () => {
+      const savedUser = localStorage.getItem(AUTH_KEY);
+      if (savedUser) setCurrentUser(savedUser);
+      
+      await fetchUsers();
+      await fetchShipments(); // Puxa dados globais logo no início
+    };
+    init();
+  }, [fetchUsers, fetchShipments]);
 
+  // Dark Mode
   useEffect(() => {
     localStorage.setItem(THEME_KEY, darkMode ? 'dark' : 'light');
     if (darkMode) {
@@ -102,34 +132,35 @@ const App: React.FC = () => {
     }
   }, [darkMode]);
 
+  // Efeito de Sincronização (PUSH para a nuvem)
   useEffect(() => {
+    // SÓ envia para a nuvem se já tivermos carregado a versão global uma vez
+    // Isso evita que o estado [] inicial apague o banco de dados remoto
+    if (loadingInitial || !hasLoadedFromDB) return;
+    
     localStorage.setItem(STORAGE_KEY, JSON.stringify(shipments));
     
     const syncWithSheets = async () => {
-      if (shipments.length === 0) return;
       setSyncStatus('syncing');
       try {
         await fetch(GOOGLE_SCRIPT_URL, {
           method: 'POST',
           mode: 'no-cors',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ shipments }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'syncShipments', shipments }),
         });
         setSyncStatus('success');
         setTimeout(() => setSyncStatus('idle'), 3000);
       } catch (error) {
-        console.error("Erro ao sincronizar com Google Sheets:", error);
         setSyncStatus('error');
-        setTimeout(() => setSyncStatus('idle'), 5000);
       }
     };
 
     const timeoutId = setTimeout(syncWithSheets, 1500); 
     return () => clearTimeout(timeoutId);
-  }, [shipments]);
+  }, [shipments, loadingInitial, hasLoadedFromDB]);
 
+  // Cálculos de estatísticas
   const stats: BonusStats = useMemo(() => {
     let totalSent = 0;
     let totalReformed = 0;
@@ -138,9 +169,9 @@ const App: React.FC = () => {
     let totalFailed = 0;
     let totalBonusPaid = 0;
 
-    shipments.forEach(s => {
+    (shipments || []).forEach(s => {
       totalSent += s.quantitySent;
-      s.returns.forEach(r => {
+      (s.returns || []).forEach(r => {
         totalReformed += r.reformed;
         totalRepaired += r.repaired;
         totalExchanged += r.exchanged;
@@ -154,21 +185,15 @@ const App: React.FC = () => {
     const pendingBonuses = Math.max(0, totalEarned - totalBonusPaid);
 
     return { 
-      totalSent,
-      totalReformed,
-      totalRepaired,
-      totalExchanged,
-      totalFailed,
-      totalBonusEarned: totalEarned, 
-      totalBonusPaid, 
-      pendingBonuses 
+      totalSent, totalReformed, totalRepaired, totalExchanged, totalFailed,
+      totalBonusEarned: totalEarned, totalBonusPaid, pendingBonuses 
     };
   }, [shipments]);
 
   const allInvoiceNumbers = useMemo(() => {
     const numbers: string[] = [];
-    shipments.forEach(s => {
-      s.returns.forEach(r => {
+    (shipments || []).forEach(s => {
+      (s.returns || []).forEach(r => {
         numbers.push(r.invoiceNumber.toLowerCase());
       });
     });
@@ -187,6 +212,7 @@ const App: React.FC = () => {
   const handleLogin = (username: string) => {
     setCurrentUser(username);
     localStorage.setItem(AUTH_KEY, username);
+    fetchShipments(); // Força atualização ao logar
   };
 
   const handleRegister = async (username: string, password: string): Promise<boolean> => {
@@ -195,19 +221,13 @@ const App: React.FC = () => {
       await fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          action: 'register', 
-          user: { username, password } 
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'register', user: { username, password } }),
       });
       setSyncStatus('success');
       await fetchUsers();
       return true;
     } catch (error) {
-      console.error("Erro ao cadastrar usuário:", error);
       setSyncStatus('error');
       return false;
     }
@@ -220,19 +240,13 @@ const App: React.FC = () => {
       await fetch(GOOGLE_SCRIPT_URL, {
         method: 'POST',
         mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          action: 'changePassword', 
-          user: { username: currentUser, password: newPassword } 
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'changePassword', user: { username: currentUser, password: newPassword } }),
       });
       setSyncStatus('success');
       await fetchUsers();
       return true;
     } catch (error) {
-      console.error("Erro ao alterar senha:", error);
       setSyncStatus('error');
       return false;
     }
@@ -253,7 +267,7 @@ const App: React.FC = () => {
       status: ShipmentStatus.AWAITING,
       returns: []
     };
-    setShipments([newShipment, ...shipments]);
+    setShipments(prev => [newShipment, ...prev]);
     setView('dashboard');
   };
 
@@ -269,11 +283,7 @@ const App: React.FC = () => {
           newStatus = ShipmentStatus.FINISHED;
         }
 
-        return {
-          ...s,
-          status: newStatus,
-          returns: updatedReturns
-        };
+        return { ...s, status: newStatus, returns: updatedReturns };
       }
       return s;
     }));
@@ -291,7 +301,8 @@ const App: React.FC = () => {
         onLogin={handleLogin} 
         onRegister={handleRegister}
         validUsers={validUsers} 
-        isLoading={loadingUsers} 
+        isLoading={loadingInitial} 
+        darkMode={darkMode}
       />
     );
   }
@@ -312,6 +323,15 @@ const App: React.FC = () => {
               title={darkMode ? "Modo Claro" : "Modo Escuro"}
             >
               {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+
+            {/* BOTÃO DE REFRESH MANUAL */}
+            <button 
+              onClick={fetchShipments}
+              className="p-2 hover:bg-red-600 dark:hover:bg-red-800 rounded-full transition-colors"
+              title="Atualizar Dados"
+            >
+              <RotateCcw className={`w-5 h-5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
             </button>
 
             {syncStatus !== 'idle' && (
@@ -340,11 +360,7 @@ const App: React.FC = () => {
                </button>
             </div>
 
-            <button 
-              onClick={handleLogout}
-              className="p-2 hover:bg-red-600 dark:hover:bg-red-800 rounded-full transition-colors text-red-100"
-              title="Sair"
-            >
+            <button onClick={handleLogout} className="p-2 hover:bg-red-600 dark:hover:bg-red-800 rounded-full transition-colors text-red-100" title="Sair">
               <LogOut className="w-5 h-5" />
             </button>
           </div>
@@ -363,18 +379,11 @@ const App: React.FC = () => {
         )}
         
         {view === 'new' && (
-          <ShipmentForm 
-            onSave={handleAddShipment} 
-            onCancel={() => setView('dashboard')} 
-          />
+          <ShipmentForm onSave={handleAddShipment} onCancel={() => setView('dashboard')} />
         )}
 
         {view === 'list' && (
-          <ShipmentList 
-            shipments={shipments} 
-            onOpenReturn={openReturnForm}
-            onBack={() => setView('dashboard')}
-          />
+          <ShipmentList shipments={shipments} onOpenReturn={openReturnForm} onBack={() => setView('dashboard')} />
         )}
 
         {view === 'return' && activeShipmentId && (
@@ -398,36 +407,24 @@ const App: React.FC = () => {
       </main>
 
       <nav className="fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700 p-2 md:hidden flex justify-around items-center z-10 transition-colors">
-        <button 
-          onClick={() => setView('dashboard')}
-          className={`flex flex-col items-center p-2 rounded-lg ${view === 'dashboard' ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}
-        >
+        <button onClick={() => setView('dashboard')} className={`flex flex-col items-center p-2 rounded-lg ${view === 'dashboard' ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
           <LayoutDashboard className="w-6 h-6" />
           <span className="text-xs">Início</span>
         </button>
-        <button 
-          onClick={() => setView('new')}
-          className={`flex flex-col items-center p-2 rounded-lg ${view === 'new' ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}
-        >
+        <button onClick={() => setView('new')} className={`flex flex-col items-center p-2 rounded-lg ${view === 'new' ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
           <div className="bg-red-600 dark:bg-red-700 text-white p-2 rounded-full -mt-8 shadow-lg ring-4 ring-slate-50 dark:ring-slate-900 transition-all">
             <Plus className="w-6 h-6" />
           </div>
           <span className="text-xs mt-1">Nova</span>
         </button>
-        <button 
-          onClick={() => setView('list')}
-          className={`flex flex-col items-center p-2 rounded-lg ${view === 'list' ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}
-        >
+        <button onClick={() => setView('list')} className={`flex flex-col items-center p-2 rounded-lg ${view === 'list' ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'}`}>
           <History className="w-6 h-6" />
           <span className="text-xs">Histórico</span>
         </button>
       </nav>
 
       {showBonusAlert && (
-        <BonusNotification 
-          availableCount={stats.pendingBonuses} 
-          onClose={() => setShowBonusAlert(false)} 
-        />
+        <BonusNotification availableCount={stats.pendingBonuses} onClose={() => setShowBonusAlert(false)} />
       )}
     </div>
   );
