@@ -1,24 +1,15 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, Calendar, Hash } from 'lucide-react';
-import { Shipment } from '../types';
 
 interface ShipmentFormProps {
-  initialData?: Shipment;
   onSave: (data: { date: string, quantity: number }) => void;
   onCancel: () => void;
 }
 
-const ShipmentForm: React.FC<ShipmentFormProps> = ({ initialData, onSave, onCancel }) => {
+const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSave, onCancel }) => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [quantity, setQuantity] = useState('');
-
-  useEffect(() => {
-    if (initialData) {
-      setDate(initialData.sendDate);
-      setQuantity(initialData.quantitySent.toString());
-    }
-  }, [initialData]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,22 +17,13 @@ const ShipmentForm: React.FC<ShipmentFormProps> = ({ initialData, onSave, onCanc
       alert("Por favor, preencha todos os campos corretamente.");
       return;
     }
-    
-    if (initialData) {
-      const totalReturned = (initialData.returns || []).reduce((acc, r) => acc + r.reformed + r.repaired + r.exchanged + r.failed, 0);
-      if (parseInt(quantity) < totalReturned) {
-        alert(`A nova quantidade (${quantity}) não pode ser menor que o total já retornado (${totalReturned} pneus).`);
-        return;
-      }
-    }
-
     onSave({ date, quantity: parseInt(quantity) });
   };
 
   return (
     <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-700 overflow-hidden animate-in slide-in-from-bottom duration-300">
       <div className="bg-red-700 dark:bg-red-900 text-white p-4 flex justify-between items-center">
-        <h2 className="text-lg font-bold">{initialData ? `Editar ${initialData.number}` : 'Nova Remessa'}</h2>
+        <h2 className="text-lg font-bold">Nova Remessa</h2>
         <button onClick={onCancel} className="p-1 hover:bg-red-600 dark:hover:bg-red-800 rounded-full transition-colors">
           <X className="w-6 h-6" />
         </button>
@@ -91,7 +73,7 @@ const ShipmentForm: React.FC<ShipmentFormProps> = ({ initialData, onSave, onCanc
             type="submit"
             className="flex-[2] bg-red-600 dark:bg-red-700 hover:bg-red-700 dark:hover:bg-red-800 text-white font-bold py-4 rounded-xl shadow-lg shadow-red-200 transition-all"
           >
-            {initialData ? 'Atualizar Remessa' : 'Cadastrar Remessa'}
+            Cadastrar Remessa
           </button>
         </div>
       </form>
