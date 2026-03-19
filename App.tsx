@@ -93,6 +93,12 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const handleLogin = (username: string) => {
+    setCurrentUser(username);
+    localStorage.setItem(AUTH_KEY, username);
+    fetchShipments();
+  };
+
   useEffect(() => {
     const localData = localStorage.getItem(STORAGE_KEY);
     if (localData) {
@@ -109,7 +115,6 @@ const App: React.FC = () => {
     localStorage.setItem(THEME_KEY, darkMode ? 'dark' : 'light');
   }, [darkMode]);
 
-  // Sync automático apenas para mudanças que não foram manuais ou deletar
   useEffect(() => {
     if (loadingInitial || !hasLoadedFromDB) return;
     if (isInitialMount.current) {
@@ -130,11 +135,20 @@ const App: React.FC = () => {
         tBonusPaid += (r.bonusesRedeemed || 0);
       });
     });
-    const paidReforms = Math.max(0, tReformed - tBonusPaid);
+
+    // A contagem é feita atravé da lista "humana" de visualização (shipments)
+    const totalBonusEarned = Math.floor(tReformed / 15);
+    const pendingBonuses = Math.max(0, totalBonusEarned - tBonusPaid);
+
     return { 
       totalSent: shipments.reduce((a, b) => a + (b.quantitySent || 0), 0),
-      totalReformed: tReformed, totalRepaired: tRepaired, totalExchanged: tExchanged, totalFailed: tFailed,
-      totalBonusEarned: Math.floor(paidReforms / 15), totalBonusPaid: tBonusPaid, pendingBonuses: Math.floor(paidReforms / 15)
+      totalReformed: tReformed, 
+      totalRepaired: tRepaired, 
+      totalExchanged: tExchanged, 
+      totalFailed: tFailed,
+      totalBonusEarned, 
+      totalBonusPaid: tBonusPaid, 
+      pendingBonuses
     };
   }, [shipments]);
 
@@ -188,10 +202,9 @@ const App: React.FC = () => {
   const handleDeleteShipment = async (id: string) => {
     const shipment = shipments.find(s => s.id === id);
     if (shipment?.status === ShipmentStatus.FINISHED) {
-      alert("Não é possível excluir uma remessa finalizada.");
       return;
     }
-    if (!confirm("Tem certeza que deseja excluir esta remessa e todo o seu histórico?")) return;
+    
     const updated = shipments.filter(s => s.id !== id);
     setShipments(updated);
     await forceSync(updated);
@@ -214,6 +227,8 @@ const App: React.FC = () => {
     setShipments(updated);
     await forceSync(updated);
   };
+
+  if (!currentUser) return <Login onLogin={handleLogin} onRegister={async () => true} validUsers={validUsers} isLoading={loadingInitial} darkMode={darkMode} />;
 
   return (
     <div className={`min-h-screen ${darkMode ? 'dark bg-slate-900' : 'bg-slate-50'} flex flex-col transition-colors duration-300 pb-20 md:pb-0`}>
