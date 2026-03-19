@@ -12,7 +12,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ stats, onNewShipment, onViewList, recentShipments, onOpenReturn }) => {
-  const nextBonusProgress = stats.totalReformed % 15;
+  const nextBonusProgress = Math.max(0, stats.totalReformed - stats.totalBonusPaid) % 15;
   const progressPercent = (nextBonusProgress / 15) * 100;
 
   return (
@@ -95,7 +95,7 @@ const Dashboard: React.FC<DashboardProps> = ({ stats, onNewShipment, onViewList,
             <h4 className="font-black text-slate-800 dark:text-white uppercase text-xs tracking-tight">Progresso do Próximo Bônus</h4>
             <p className="text-xs text-slate-400 mt-1 font-medium">{nextBonusProgress} de 15 reformas concluídas</p>
           </div>
-          <span className="text-xl font-black text-red-600">{Math.round(progressPercent)}%</span>
+          <span className="text-xl font-black text-red-600">Faltam {15 - nextBonusProgress} pneus</span>
         </div>
         <div className="w-full bg-slate-100 dark:bg-slate-900 h-4 rounded-full overflow-hidden p-1">
           <div 

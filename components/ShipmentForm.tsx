@@ -10,11 +10,13 @@ interface ShipmentFormProps {
 const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSave, onCancel }) => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [quantity, setQuantity] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!date || !quantity || parseInt(quantity) <= 0) {
-      alert("Por favor, preencha todos os campos corretamente.");
+      setError("Por favor, preencha todos os campos corretamente.");
       return;
     }
     onSave({ date, quantity: parseInt(quantity) });
@@ -30,6 +32,11 @@ const ShipmentForm: React.FC<ShipmentFormProps> = ({ onSave, onCancel }) => {
       </div>
 
       <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-4 rounded-xl text-sm font-bold animate-in shake duration-300">
+            {error}
+          </div>
+        )}
         <div>
           <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 flex items-center gap-2">
             <Calendar className="w-4 h-4 text-red-600 dark:text-red-400" />

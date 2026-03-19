@@ -11,7 +11,8 @@ import {
   Sun, 
   Loader2,
   LayoutDashboard,
-  History
+  History,
+  Trash2
 } from 'lucide-react';
 import { Shipment, ShipmentStatus, ReturnEvent, BonusStats } from './types';
 import Dashboard from './components/Dashboard';
@@ -41,6 +42,10 @@ const App: React.FC = () => {
     const saved = localStorage.getItem(THEME_KEY);
     return saved === 'dark';
   });
+
+  const [shipmentToDelete, setShipmentToDelete] = useState<string | null>(null);
+  const [returnToDelete, setReturnToDelete] = useState<{shipmentId: string, returnId: string} | null>(null);
+  const [alertMessage, setAlertMessage] = useState<{title: string, message: string} | null>(null);
 
   const forceSync = async (currentShipments: Shipment[]) => {
     setSyncStatus('syncing');
@@ -199,19 +204,29 @@ const App: React.FC = () => {
     await forceSync(updated);
   };
 
-  const handleDeleteShipment = async (id: string) => {
+  const handleDeleteShipment = (id: string) => {
     const shipment = shipments.find(s => s.id === id);
     if (shipment?.status === ShipmentStatus.FINISHED) {
+      setAlertMessage({
+        title: "Ação Não Permitida",
+        message: "Não é possível excluir uma remessa que já foi finalizada."
+      });
       return;
     }
-    
-    const updated = shipments.filter(s => s.id !== id);
+    setShipmentToDelete(id);
+  };
+
+  const confirmDeleteShipment = async () => {
+    if (!shipmentToDelete) return;
+    const updated = shipments.filter(s => s.id !== shipmentToDelete);
     setShipments(updated);
+    setShipmentToDelete(null);
     await forceSync(updated);
   };
 
-  const handleDeleteReturn = async (shipmentId: string, returnId: string) => {
-    if (!confirm("Excluir esta etapa do retorno?")) return;
+  const confirmDeleteReturn = async () => {
+    if (!returnToDelete) return;
+    const { shipmentId, returnId } = returnToDelete;
     const updated = shipments.map(s => {
       if (s.id === shipmentId) {
         const updatedReturns = s.returns.filter(r => r.id !== returnId);
@@ -225,7 +240,12 @@ const App: React.FC = () => {
       return s;
     });
     setShipments(updated);
+    setReturnToDelete(null);
     await forceSync(updated);
+  };
+
+  const handleDeleteReturn = (shipmentId: string, returnId: string) => {
+    setReturnToDelete({ shipmentId, returnId });
   };
 
   if (!currentUser) return <Login onLogin={handleLogin} onRegister={async () => true} validUsers={validUsers} isLoading={loadingInitial} darkMode={darkMode} />;
@@ -297,6 +317,82 @@ const App: React.FC = () => {
           <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase">
             {syncStatus === 'syncing' ? 'Sincronizando...' : 'Salvo'}
           </span>
+        </div>
+      )}
+
+      {shipmentToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 dark:border-slate-700 animate-in zoom-in-95 duration-300">
+            <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded-2xl w-fit mb-4 text-red-600 dark:text-red-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">Confirmar Exclusão</h3>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-6">
+              Tem certeza que deseja excluir esta remessa? Todos os dados de retorno vinculados a ela serão perdidos permanentemente.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShipmentToDelete(null)} 
+                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-2xl font-bold active:scale-95 transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmDeleteShipment} 
+                className="flex-1 py-3 bg-red-600 text-white rounded-2xl font-bold shadow-lg shadow-red-200 dark:shadow-none active:scale-95 transition-all"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {returnToDelete && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 dark:border-slate-700 animate-in zoom-in-95 duration-300">
+            <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded-2xl w-fit mb-4 text-red-600 dark:text-red-400">
+              <Trash2 className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">Excluir Retorno</h3>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-6">
+              Deseja realmente excluir esta etapa do retorno? Esta ação não pode ser desfeita.
+            </p>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setReturnToDelete(null)} 
+                className="flex-1 py-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-2xl font-bold active:scale-95 transition-all"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={confirmDeleteReturn} 
+                className="flex-1 py-3 bg-red-600 text-white rounded-2xl font-bold shadow-lg shadow-red-200 dark:shadow-none active:scale-95 transition-all"
+              >
+                Excluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {alertMessage && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-[100] p-4 animate-in fade-in duration-300">
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl max-w-sm w-full shadow-2xl border border-slate-100 dark:border-slate-700 animate-in zoom-in-95 duration-300">
+            <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-2xl w-fit mb-4 text-blue-600 dark:text-blue-400">
+              <Check className="w-6 h-6" />
+            </div>
+            <h3 className="text-lg font-black text-slate-800 dark:text-white mb-2">{alertMessage.title}</h3>
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-6">
+              {alertMessage.message}
+            </p>
+            <button 
+              onClick={() => setAlertMessage(null)} 
+              className="w-full py-3 bg-slate-800 dark:bg-slate-700 text-white rounded-2xl font-bold active:scale-95 transition-all"
+            >
+              Entendido
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Save, FileText, Calendar, Info, Gift, Minus, Plus } from 'lucide-react';
+import { X, Save, FileText, Calendar, Info, Gift, Minus, Plus, AlertCircle } from 'lucide-react';
 import { Shipment, ReturnEvent } from '../types';
 
 interface ReturnFormProps {
@@ -21,6 +21,8 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, initialData, pendingB
   const [invoiceNumber, setInvoiceNumber] = useState(initialData?.invoiceNumber || '');
   const [bonusesToRedeem, setBonusesToRedeem] = useState(initialData?.bonusesRedeemed || 0);
 
+  const [error, setError] = useState<string | null>(null);
+
   const alreadyReturned = useMemo(() => {
     return shipment.returns
       .filter(r => r.id !== initialData?.id)
@@ -35,6 +37,28 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, initialData, pendingB
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+
+    if (invoiceNumber.trim().length === 0) {
+      setError('Por favor, informe o número da nota fiscal.');
+      return;
+    }
+
+    if (isInvoiceDuplicate) {
+      setError('Este número de nota fiscal já foi utilizado.');
+      return;
+    }
+
+    if (currentTotal === 0) {
+      setError('A quantidade total deve ser maior que zero.');
+      return;
+    }
+
+    if (currentTotal > remainingTotal) {
+      setError(`A quantidade total (${currentTotal}) excede o saldo restante (${remainingTotal}).`);
+      return;
+    }
+
     if (!canSave) return;
     onSave({
       id: initialData?.id || crypto.randomUUID(),
@@ -56,6 +80,12 @@ const ReturnForm: React.FC<ReturnFormProps> = ({ shipment, initialData, pendingB
       </div>
 
       <form onSubmit={handleSubmit} className="p-6 space-y-5">
+        {error && (
+          <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-3 rounded-xl flex items-center gap-2 text-sm font-bold animate-in shake duration-300">
+            <AlertCircle className="w-5 h-5 shrink-0" />
+            {error}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-bold text-slate-400 mb-1 uppercase tracking-widest">Data</label>

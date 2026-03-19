@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Disc, Lock, User, AlertCircle, Loader2, UserPlus, LogIn } from 'lucide-react';
+import { Disc, Lock, User, AlertCircle, Loader2, UserPlus, LogIn, Check } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (username: string) => void;
@@ -16,11 +16,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister, validUsers, isLoadin
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
 
     if (mode === 'register') {
       if (password !== confirmPassword) {
@@ -39,13 +41,13 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister, validUsers, isLoadin
       }
 
       setIsProcessing(true);
-      const success = await onRegister(username.trim(), password);
+      const successReg = await onRegister(username.trim(), password);
       setIsProcessing(false);
 
-      if (success) {
+      if (successReg) {
         setMode('login');
         setError(null);
-        alert('Cadastro realizado com sucesso! Agora você pode entrar.');
+        setSuccess('Cadastro realizado com sucesso! Agora você pode entrar.');
       } else {
         setError('Ocorreu um erro ao tentar cadastrar. Tente novamente.');
       }
@@ -66,6 +68,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister, validUsers, isLoadin
   const toggleMode = () => {
     setMode(mode === 'login' ? 'register' : 'login');
     setError(null);
+    setSuccess(null);
     setPassword('');
     setConfirmPassword('');
   };
@@ -87,6 +90,12 @@ const Login: React.FC<LoginProps> = ({ onLogin, onRegister, validUsers, isLoadin
           </h2>
           
           <form onSubmit={handleSubmit} className="space-y-5">
+            {success && (
+              <div className="flex items-center gap-2 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20 p-3 rounded-xl animate-in slide-in-from-top-2 duration-300">
+                <Check className="w-5 h-5 shrink-0" />
+                <p className="text-sm font-bold">{success}</p>
+              </div>
+            )}
             <div>
               <label className="block text-sm font-bold text-slate-600 dark:text-slate-400 mb-2">Usuário</label>
               <div className="relative">
